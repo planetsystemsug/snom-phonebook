@@ -52,17 +52,17 @@ compatibility caveat and Snom source.
    named `phonebook-data` volume holds the SQLite database outside the web root
    and survives container replacement. For later updates, run `git pull` in the
    same directory, then repeat this command.
-4. Permit the NAS port `8080` only on the trusted LAN. Browse to
-   `http://NAS-HOSTNAME:8080/`, sign in with `ADMIN_USERNAME` and the password
+4. Permit the NAS port `8081` only on the trusted LAN. Browse to
+   `http://NAS-HOSTNAME:8081/`, sign in with `ADMIN_USERNAME` and the password
    used to produce `ADMIN_PASSWORD_HASH`, and add contacts.
-5. Confirm `http://NAS-HOSTNAME:8080/health.php` returns `ok`. If phone
+5. Confirm `http://NAS-HOSTNAME:8081/health.php` returns `ok`. If phone
    authentication is enabled, confirm the XML endpoint with:
 
    ```sh
-   curl -u phone:a-separate-phone-password http://NAS-HOSTNAME:8080/phonebook.xml.php
+   curl -u phone:a-separate-phone-password http://NAS-HOSTNAME:8081/phonebook.xml.php
    ```
 6. On each phone, create an **Externes Verzeichnis** entry named, for example,
-   `Firma`; set URL to `http://NAS-HOSTNAME:8080/phonebook.xml.php`, configure
+   `Firma`; set URL to `http://NAS-HOSTNAME:8081/phonebook.xml.php`, configure
    the same optional HTTP username/password, choose a polling interval, and
    verify one contact on the actual phone. Do not hard-code the QNAP IP address.
 
