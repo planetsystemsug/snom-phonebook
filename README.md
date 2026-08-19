@@ -37,10 +37,21 @@ compatibility caveat and Snom source.
    Put the first hash in `ADMIN_PASSWORD_HASH`, a random value of at least 32
    characters in `APP_SECRET`, and optionally put `phone` and the second hash
    in `PHONEBOOK_AUTH_USER` and `PHONEBOOK_AUTH_PASSWORD_HASH`.
-3. In Container Station, create an Application and select the repository's
-   `docker-compose.yml`. Supply the values from `.env` when prompted, then
-   create it. The named `phonebook-data` volume holds the SQLite database
-   outside the web root and survives container replacement.
+3. **Do not paste the Compose YAML into Container Station's Create
+   Application editor.** That editor validates a temporary YAML file and does
+   not load the adjacent `.env` file, so it cannot resolve the required
+   variables. Enable SSH on the NAS, then run the following from the repository
+   directory on the NAS (not from the Windows PC):
+
+   ```sh
+   cd /share/Container/snom-phonebook
+   docker compose --env-file .env -p snom-phonebook up -d --build
+   ```
+
+   Container Station will still show and manage the resulting container. The
+   named `phonebook-data` volume holds the SQLite database outside the web root
+   and survives container replacement. For later updates, run `git pull` in the
+   same directory, then repeat this command.
 4. Permit the NAS port `8080` only on the trusted LAN. Browse to
    `http://NAS-HOSTNAME:8080/`, sign in with `ADMIN_USERNAME` and the password
    used to produce `ADMIN_PASSWORD_HASH`, and add contacts.
@@ -69,6 +80,16 @@ php tests/run.php
 
 The tests cover generated XML, German umlauts and XML special characters, an
 empty phonebook, invalid contact data, and optional HTTP Basic authentication.
+
+### Why Container Station rejected `.env`
+
+The Compose file intentionally uses the `${VARIABLE:?message}` form to fail
+closed when a secret is absent. Docker Compose loads `.env` only from its
+project directory (or one explicitly supplied with `--env-file`). Container
+Station's YAML editor instead converts a temporary file, which is why its
+validator reports `ADMIN_PASSWORD_HASH` as missing even when your repository's
+`.env` is correct. Use the SSH command above; do not weaken the Compose file by
+putting passwords into Git or by adding insecure defaults.
 
 ## Security
 
