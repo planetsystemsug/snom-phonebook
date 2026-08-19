@@ -1,0 +1,2 @@
+# snom-phonebook
+
