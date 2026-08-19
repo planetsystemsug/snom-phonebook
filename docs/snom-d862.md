@@ -1,6 +1,6 @@
 # Snom D862 External Directory protocol investigation
 
-## Status: not verified — implementation blocked
+## Status: implementation decision approved by the project owner
 
 The target phone is a Snom D862 running firmware `10.1.226.13`.  The intended
 feature is the phone UI path **Telefonbuch → Externes Verzeichnis**, which has
@@ -16,11 +16,11 @@ the authentication scheme used by the *Benutzer* and *Passwort* fields, any
 request query parameters, pagination/search behaviour, or a response content
 type.
 
-No XML endpoint or phonebook application may be implemented until this is
-verified.  In particular, `SnomIPPhoneDirectory` must not be used by
-assumption: Snom documents it as an XML MiniBrowser item and marks it
-deprecated, which is not evidence that the External Directory configuration
-uses it.
+The project owner explicitly approved the `SnomIPPhoneDirectory` standard on
+2026-08-19. The implementation therefore uses that schema as an intentional
+compatibility choice. It must not be described as vendor-verified for this
+exact screen: Snom documents it as an XML MiniBrowser item and marks it
+deprecated, rather than documenting it as the External Directory contract.
 
 ## What was verified
 
@@ -36,7 +36,7 @@ uses it.
    added to the **Local Directory** / Phone Manager.  This is a different
    feature from External Directory.
 
-## Required evidence to unblock
+## Evidence still recommended
 
 Provide at least one of the following for a D862 running `10.1.226.13`:
 
@@ -47,10 +47,10 @@ Provide at least one of the following for a D862 running `10.1.226.13`:
 - A packet capture (with credentials redacted) of one of the phones requesting
   a known-good External Directory, together with that server's XML response.
 
-The evidence must confirm the root element, required/optional elements and
+The evidence should confirm the root element, required/optional elements and
 attributes, UTF-8/content-type requirements, search/paging semantics, and the
-HTTP authentication method.  Once supplied, this document should be updated
-with the exact contract and source before implementation resumes.
+HTTP authentication method. Once available, update this document and validate
+the implementation against an actual D862 before production use.
 
 ## Sources consulted
 

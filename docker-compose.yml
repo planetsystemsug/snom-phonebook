@@ -1,0 +1,25 @@
+services:
+  snom-phonebook:
+    build: .
+    container_name: snom-phonebook
+    ports:
+      - "8080:80"
+    environment:
+      APP_DATA_DIR: /data
+      APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH in .env}
+      PHONEBOOK_AUTH_USER: ${PHONEBOOK_AUTH_USER:-}
+      PHONEBOOK_AUTH_PASSWORD_HASH: ${PHONEBOOK_AUTH_PASSWORD_HASH:-}
+    volumes:
+      - phonebook-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(trim(file_get_contents('http://127.0.0.1/health.php')) === 'ok' ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  phonebook-data:
