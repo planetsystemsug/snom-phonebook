@@ -30,6 +30,9 @@ putenv('ADMIN_PASSWORD_HASH=' . password_hash('admin-test', PASSWORD_DEFAULT));
 putenv('PHONEBOOK_AUTH_USER=phone');
 putenv('PHONEBOOK_AUTH_PASSWORD_HASH=' . password_hash('phone-test', PASSWORD_DEFAULT));
 $pdo = db(config()); save_contact($pdo, ['name' => 'Özil & Co.', 'company' => '', 'telephone' => '1234', 'mobile' => '', 'email' => '']);
+$resetConfig = config(); $resetConfig['admin_password_hash'] = password_hash('new-admin-test', PASSWORD_DEFAULT); db($resetConfig);
+$adminHash = $pdo->query("SELECT password_hash FROM users WHERE username = 'admin'")->fetchColumn();
+check(password_verify('new-admin-test', $adminHash), 'updates configured admin password hash on restart');
 $process = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', dirname(__DIR__) . '/public'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
 if (is_resource($process)) {
     usleep(300000);

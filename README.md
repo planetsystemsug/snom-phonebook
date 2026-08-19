@@ -98,3 +98,8 @@ session-id regeneration at login, CSRF tokens on every POST, HTML escaping, and
 strict server-side input validation. The phone endpoint supports optional HTTP
 Basic authentication with a password hash. Never commit `.env`, database files,
 or generated runtime data.
+
+To reset the management password, generate a new `ADMIN_PASSWORD_HASH` from
+the new plaintext password, replace only that value in `.env`, and rerun the
+deployment command. The configured admin account is synchronized on startup;
+the SQLite database itself remains intact.

@@ -36,7 +36,10 @@ function db(array $config): PDO
     $pdo->exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');
     $pdo->exec('CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, company TEXT NOT NULL DEFAULT \'\', telephone TEXT NOT NULL DEFAULT \'\', mobile TEXT NOT NULL DEFAULT \'\', email TEXT NOT NULL DEFAULT \'\', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
     if ($config['admin_password_hash'] !== '') {
-        $stmt = $pdo->prepare('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, ?)');
+        // The environment is the source of truth for the bootstrap account.
+        // This permits a deliberate password reset through an application
+        // recreate without manipulating the SQLite database directly.
+        $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?) ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash');
         $stmt->execute([$config['admin_username'], $config['admin_password_hash'], gmdate('c')]);
     }
     return $pdo;
