@@ -105,6 +105,26 @@ function phonebook_xml(array $contacts): string
     $xml->endElement(); return $xml->outputMemory();
 }
 
+function remote_directory_xml(array $contacts): string
+{
+    $xml = new \XMLWriter(); $xml->openMemory(); $xml->startDocument('1.0', 'UTF-8');
+    $xml->startElement('tbook'); $xml->writeAttribute('e', '2'); $xml->writeAttribute('version', '2.0');
+    foreach ($contacts as $contact) {
+        $nameParts = preg_split('/\\s+/u', trim($contact['name'])) ?: [];
+        $lastName = count($nameParts) > 1 ? (string) array_pop($nameParts) : '';
+        $firstName = implode(' ', $nameParts);
+        if ($firstName === '') { $firstName = $lastName; $lastName = ''; }
+        $xml->startElement('contact'); $xml->writeAttribute('fav', 'false'); $xml->writeAttribute('vip', 'false'); $xml->writeAttribute('blocked', 'false');
+        $xml->writeElement('first_name', $firstName); $xml->writeElement('last_name', $lastName); $xml->startElement('numbers');
+        foreach (['telephone' => 'fixed', 'mobile' => 'mobile'] as $field => $type) {
+            if ($contact[$field] === '') continue;
+            $xml->startElement('number'); $xml->writeAttribute('no', $contact[$field]); $xml->writeAttribute('type', $type); $xml->writeAttribute('outgoing_id', '0'); $xml->endElement();
+        }
+        $xml->endElement(); $xml->endElement();
+    }
+    $xml->endElement(); return $xml->outputMemory();
+}
+
 function phonebook_authorized(array $server, array $config): bool
 {
     if ($config['phonebook_auth_user'] === '' && $config['phonebook_auth_password_hash'] === '') return true;

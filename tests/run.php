@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/src/App.php';
-use function SnomPhonebook\{config, db, save_contact, validate_contact, phonebook_xml, phonebook_authorized};
+use function SnomPhonebook\{config, db, save_contact, validate_contact, phonebook_xml, remote_directory_xml, phonebook_authorized};
 $failures = 0;
 function check(bool $condition, string $message): void { global $failures; if (!$condition) { $failures++; echo "FAIL: $message\n"; } }
 function expect_exception(callable $callable, string $message): void { try { $callable(); check(false, $message); } catch (RuntimeException) { check(true, $message); } }
@@ -14,6 +14,10 @@ $xml = phonebook_xml([['name' => 'Jörg & Söhne', 'company' => 'Müller <Partne
 check(str_contains($xml, 'Jörg &amp; Söhne — Müller &lt;Partner&gt;'), 'escapes XML special characters and keeps UTF-8');
 check(substr_count($xml, '<DirectoryEntry>') === 2, 'emits one entry per supplied number');
 check(!str_contains(phonebook_xml([]), '<DirectoryEntry>'), 'handles empty phonebook');
+$remoteXml = remote_directory_xml([['name' => 'Jörg & Söhne', 'company' => '', 'telephone' => '+49 30', 'mobile' => '+49 171', 'email' => '']]);
+check(str_contains($remoteXml, '<tbook e="2" version="2.0">'), 'emits Remote XML Directory tbook version 2.0');
+check(str_contains($remoteXml, '<first_name>Jörg &amp;</first_name>') && str_contains($remoteXml, '<last_name>Söhne</last_name>'), 'maps UTF-8 display name to Remote XML Directory name fields');
+check(str_contains($remoteXml, 'no="+49 30" type="fixed" outgoing_id="0"') && str_contains($remoteXml, 'type="mobile"'), 'emits typed Remote XML Directory numbers');
 $hash = password_hash('secret', PASSWORD_DEFAULT); $authConfig = ['phonebook_auth_user' => 'phone', 'phonebook_auth_password_hash' => $hash];
 check(phonebook_authorized(['PHP_AUTH_USER' => 'phone', 'PHP_AUTH_PW' => 'secret'], $authConfig), 'authorizes valid endpoint credentials');
 check(!phonebook_authorized(['PHP_AUTH_USER' => 'phone', 'PHP_AUTH_PW' => 'wrong'], $authConfig), 'rejects invalid endpoint credentials');
@@ -42,6 +46,9 @@ if (is_resource($process)) {
     $body = file_get_contents("http://127.0.0.1:$port/phonebook.xml.php", false, $context);
     check(str_contains($body, '<SnomIPPhoneDirectory>') && str_contains($body, 'Özil &amp; Co.'), 'HTTP XML endpoint returns escaped directory XML');
     check(str_contains(implode("\n", $http_response_header ?? []), 'Content-Type: application/xml; charset=UTF-8'), 'HTTP XML endpoint sets XML UTF-8 content type');
+    $remoteContext = stream_context_create(['http' => ['method' => 'POST', 'header' => 'Authorization: Basic ' . base64_encode('phone:phone-test')]]);
+    $remoteBody = file_get_contents("http://127.0.0.1:$port/remote-directory.xml.php", false, $remoteContext);
+    check(str_contains($remoteBody, '<tbook e="2" version="2.0">'), 'Remote XML Directory endpoint accepts phone POST requests');
     proc_terminate($process); foreach ($pipes as $pipe) fclose($pipe); proc_close($process);
 } else { check(false, 'starts PHP HTTP test server'); }
 echo $failures ? "$failures test(s) failed\n" : "All tests passed\n"; exit($failures ? 1 : 0);

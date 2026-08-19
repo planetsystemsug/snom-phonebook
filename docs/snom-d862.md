@@ -1,26 +1,44 @@
 # Snom D862 External Directory protocol investigation
 
-## Status: implementation decision approved by the project owner
+## Status: Remote XML Directory verified
 
 The target phone is a Snom D862 running firmware `10.1.226.13`.  The intended
 feature is the phone UI path **Telefonbuch → Externes Verzeichnis**, which has
 the configuration fields **Name**, **Benutzer**, **URL**, **Passwort**, and
 **Intervall**.
 
-Snom's published documentation available during this investigation does **not**
-state the XML request/response contract for that particular D862 feature and
-firmware version.  It therefore does not establish that a URL configured there
-accepts a static `tbook` document, a Snom XML MiniBrowser document, another
-Snom directory schema, or a server-side search API.  It also does not document
-the authentication scheme used by the *Benutzer* and *Passwort* fields, any
-request query parameters, pagination/search behaviour, or a response content
-type.
+The initial investigation did not locate the contract. On 2026-08-19, the
+project owner supplied Snom's Remote XML Directory page, which provides the
+required D86x `tbook` 2.0 contract. The following section records the verified
+implementation.
 
 The project owner explicitly approved the `SnomIPPhoneDirectory` standard on
-2026-08-19. The implementation therefore uses that schema as an intentional
-compatibility choice. It must not be described as vendor-verified for this
-exact screen: Snom documents it as an XML MiniBrowser item and marks it
-deprecated, rather than documenting it as the External Directory contract.
+2026-08-19. The implementation retains that schema as an intentional
+compatibility endpoint, but it must not be described as vendor-verified for
+this exact screen: Snom documents it as an XML MiniBrowser item and marks it
+deprecated.
+
+On 2026-08-19, the project owner also supplied Snom's **Remote XML Directory**
+documentation. This is the verified protocol for the D86x remote directory
+feature and is implemented at `/remote-directory.xml.php`.
+
+## Verified Remote XML Directory contract
+
+- Available from firmware 10.1.178.0; therefore supported by D862
+  10.1.226.13.
+- The phone downloads the XML periodically with HTTP `POST`; the endpoint also
+  accepts `GET` to make browser diagnostics possible.
+- Root element: `<tbook e="2" version="2.0">`.
+- Each contact is `<contact fav="false" vip="false" blocked="false">` with
+  `first_name`, `last_name`, and a `numbers` element.
+- Each number is `<number no="…" type="fixed|mobile" outgoing_id="0"/>`.
+  The endpoint maps the application telephone field to `fixed` and mobile to
+  `mobile`.
+- HTTP Basic authentication is supported when both phonebook authentication
+  environment settings are set.
+- Phones allow up to three remote XML directories, 1,000 entries each. The
+  documented refresh interval is 3,600 to 1,209,600 seconds; reboot after
+  configuring the directory.
 
 ## What was verified
 
@@ -63,3 +81,6 @@ the implementation against an actual D862 before production use.
 - [D862/D865 10.1.169.13 release notes](https://service.snom.com/plugins/viewsource/viewpagesrc.action?pageId=234331356)
   — says XML `tbook` import was extended to the D8xx Local Directory / Phone
   Manager; it does not connect that import format to External Directory.
+- [Snom Remote XML Directory](https://service.snom.com/spaces/wiki/pages/248578234/Remote%2BXML%2BDirectory)
+  — authoritative remote `tbook` 2.0 schema, HTTP POST requirement, D86x
+  behavior, authentication settings, interval, and capacity.

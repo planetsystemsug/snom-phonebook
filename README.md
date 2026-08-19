@@ -4,7 +4,7 @@ Small, self-hosted central phonebook for three Snom D862 phones. It uses PHP,
 SQLite, and one Docker container; it has no PBX, LDAP, Active Directory or
 external runtime dependency.
 
-## Phone XML endpoint
+## Phone XML endpoints
 
 The endpoint is `GET /phonebook.xml.php`. It responds with UTF-8 XML using the
 project-approved `SnomIPPhoneDirectory` format:
@@ -21,6 +21,20 @@ Mobile numbers produce an additional entry marked `(Mobil)`. E-mail addresses
 are retained for administration but cannot be represented by this small
 name/telephone XML schema. See [protocol decision](docs/snom-d862.md) for the
 compatibility caveat and Snom source.
+
+The additional, vendor-documented Remote XML Directory endpoint is
+`GET` or `POST /remote-directory.xml.php`. It emits the D86x remote-directory
+`tbook` 2.0 schema, supports multiple typed numbers per contact, and is the
+recommended endpoint for the **Externes Verzeichnis** polling feature:
+
+```xml
+<tbook e="2" version="2.0">
+  <contact fav="false" vip="false" blocked="false">
+    <first_name>Erika</first_name><last_name>Mustermann</last_name>
+    <numbers><number no="+49 30 1234" type="fixed" outgoing_id="0"/></numbers>
+  </contact>
+</tbook>
+```
 
 ## QNAP Container Station deployment
 
@@ -71,9 +85,11 @@ compatibility caveat and Snom source.
    curl -u phone:a-separate-phone-password http://NAS-HOSTNAME:8081/phonebook.xml.php
    ```
 6. On each phone, create an **Externes Verzeichnis** entry named, for example,
-   `Firma`; set URL to `http://NAS-HOSTNAME:8081/phonebook.xml.php`, configure
-   the same optional HTTP username/password, choose a polling interval, and
-   verify one contact on the actual phone. Do not hard-code the QNAP IP address.
+   `Firma`; set URL to
+   `http://NAS-HOSTNAME:8081/remote-directory.xml.php`, configure the same
+   optional HTTP username/password, and choose an interval between 3600 and
+   1209600 seconds. Reboot the phone after applying the setting and verify one
+   contact. Do not hard-code the QNAP IP address.
 
 Use HTTPS and a certificate trusted by the phones if the NAS provides a reverse
 proxy; otherwise keep this service on an isolated trusted LAN. The XML endpoint
