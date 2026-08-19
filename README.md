@@ -36,7 +36,16 @@ compatibility caveat and Snom source.
 
    Put the first hash in `ADMIN_PASSWORD_HASH`, a random value of at least 32
    characters in `APP_SECRET`, and optionally put `phone` and the second hash
-   in `PHONEBOOK_AUTH_USER` and `PHONEBOOK_AUTH_PASSWORD_HASH`.
+   in `PHONEBOOK_AUTH_USER` and `PHONEBOOK_AUTH_PASSWORD_HASH`. **Put password
+   hashes in single quotes**, because bcrypt hashes contain `$` characters and
+   Compose interpolates unquoted `.env` values:
+
+   ```dotenv
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD_HASH='$2y$10$paste-the-complete-generated-hash-here'
+   PHONEBOOK_AUTH_USER=phone
+   PHONEBOOK_AUTH_PASSWORD_HASH='$2y$10$paste-the-complete-generated-hash-here'
+   ```
 3. **Do not paste the Compose YAML into Container Station's Create
    Application editor.** That editor validates a temporary YAML file and does
    not load the adjacent `.env` file, so it cannot resolve the required
@@ -45,7 +54,7 @@ compatibility caveat and Snom source.
 
    ```sh
    cd /share/Container/snom-phonebook
-   docker compose --env-file .env -p snom-phonebook up -d --build
+   docker compose --env-file .env -p snom-phonebook up -d --build --force-recreate
    ```
 
    Container Station will still show and manage the resulting container. The
@@ -100,6 +109,6 @@ Basic authentication with a password hash. Never commit `.env`, database files,
 or generated runtime data.
 
 To reset the management password, generate a new `ADMIN_PASSWORD_HASH` from
-the new plaintext password, replace only that value in `.env`, and rerun the
-deployment command. The configured admin account is synchronized on startup;
-the SQLite database itself remains intact.
+the new plaintext password, replace only that single-quoted value in `.env`,
+and rerun the deployment command with `--force-recreate`. The configured admin
+account is synchronized on startup; the SQLite database itself remains intact.
