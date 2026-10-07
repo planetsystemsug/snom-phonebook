@@ -237,11 +237,19 @@ function parse_fritzbox_phonebook(string $xml): array
             if ($type === 'mobile' && $mobile === '') $mobile = $value;
             elseif ($telephone === '') $telephone = $value;
         }
+        // FRITZ!Box numbers can contain characters we cannot represent on the phone.
+        // Drop any number that fails validation instead of aborting the whole import.
+        if (!valid_phone($telephone)) $telephone = '';
+        if (!valid_phone($mobile)) $mobile = '';
         if ($name === '') $name = $company;
         if ($name === '' || ($telephone === '' && $mobile === '')) continue;
         $id = trim((string) $xpath->evaluate('string(./*[local-name()="uniqueid"])', $node));
         if ($id === '') $id = hash('sha256', $name . "\0" . $telephone . "\0" . $mobile);
-        $result[] = validate_contact(['name' => $name, 'company' => $company, 'telephone' => $telephone, 'mobile' => $mobile, 'email' => '']) + ['source_id' => $id];
+        try {
+            $result[] = validate_contact(['name' => $name, 'company' => $company, 'telephone' => $telephone, 'mobile' => $mobile, 'email' => '']) + ['source_id' => $id];
+        } catch (RuntimeException) {
+            continue; // Skip contacts we cannot represent (e.g. oversized fields).
+        }
     }
     return $result;
 }
