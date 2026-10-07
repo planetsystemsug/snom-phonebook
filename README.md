@@ -38,8 +38,10 @@ recommended endpoint for the **Externes Verzeichnis** polling feature:
 
 ## QNAP Container Station deployment
 
-1. Clone this Git repository to a QNAP shared folder, for example
-   `/share/Container/snom-phonebook`. Do not use the Windows PC as a server.
+1. Keep the Git checkout on the development PC. Copy the repository contents
+   to a QNAP shared folder, for example `/share/Container/snom-phonebook`, via
+   SMB/File Station. Do not use the Windows PC as a server. The QNAP does not
+   need Git installed.
 2. In that folder, copy `.env.example` to `.env` and generate two password
    hashes on a trusted machine with PHP:
 
@@ -73,8 +75,9 @@ recommended endpoint for the **Externes Verzeichnis** polling feature:
 
    Container Station will still show and manage the resulting container. The
    named `phonebook-data` volume holds the SQLite database outside the web root
-   and survives container replacement. For later updates, run `git pull` in the
-   same directory, then repeat this command.
+   and survives container replacement. For later updates, pull the changes on
+   the development PC, copy the changed project files to this same QNAP folder
+   without overwriting `.env`, then repeat this command.
 4. Permit the NAS port `8081` only on the trusted LAN. Browse to
    `http://NAS-HOSTNAME:8081/`, sign in with `ADMIN_USERNAME` and the password
    used to produce `ADMIN_PASSWORD_HASH`, and add contacts.
