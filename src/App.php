@@ -170,7 +170,7 @@ function fritzbox_http(string $url, string $username, string $password, array $h
     if (!function_exists('curl_init')) throw new RuntimeException('PHP cURL extension is unavailable.');
     $curl = curl_init($url);
     curl_setopt_array($curl, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPAUTH => CURLAUTH_DIGEST, CURLOPT_USERPWD => "$username:$password",
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPAUTH => CURLAUTH_BASIC | CURLAUTH_DIGEST, CURLOPT_USERPWD => "$username:$password",
         CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     if ($body !== null) { curl_setopt($curl, CURLOPT_POST, true); curl_setopt($curl, CURLOPT_POSTFIELDS, $body); }
@@ -188,8 +188,20 @@ function fritzbox_fault(mixed $response): string
     $document = new \DOMDocument();
     if (@$document->loadXML($response, LIBXML_NONET)) {
         $xpath = new \DOMXPath($document);
-        $fault = trim((string) $xpath->evaluate('string(//*[local-name()="errorDescription" or local-name()="faultstring"][1])'));
-        if ($fault !== '') return substr(preg_replace('/\s+/', ' ', $fault) ?: '', 0, 240);
+        // AVM answers every rejected TR-064 call with HTTP 500 and a SOAP fault whose
+        // <faultstring> is only the generic "UPnPError". The actionable reason lives in
+        // the UPnP detail block: <errorCode> plus <errorDescription>. Surface both so a
+        // wrong phonebook ID (713), bad arguments (402) or missing rights are visible.
+        $code = trim((string) $xpath->evaluate('string(//*[local-name()="errorCode"][1])'));
+        $detail = trim((string) $xpath->evaluate('string(//*[local-name()="errorDescription"][1])'));
+        if ($detail === '') {
+            // Plain SOAP fault without a UPnP detail block.
+            $detail = trim((string) $xpath->evaluate('string(//*[local-name()="faultstring"][1])'));
+        }
+        if ($code !== '' && $detail !== '') $message = "$code: $detail";
+        elseif ($code !== '') $message = "UPnP error code $code";
+        else $message = $detail;
+        if ($message !== '') return substr(preg_replace('/\s+/', ' ', $message) ?: '', 0, 240);
     }
     return 'The FRITZ!Box did not provide a readable SOAP fault.';
 }

@@ -27,6 +27,10 @@ check(decrypt_secret(encrypt_secret('router-password', $secretConfig), $secretCo
 $fritzContacts = parse_fritzbox_phonebook('<?xml version="1.0"?><phonebooks><phonebook><contact><uniqueid>42</uniqueid><person><realName>Erika Mustermann</realName><company>Beispiel GmbH</company></person><telephony><number type="work">+49301234</number><number type="mobile">+491711234</number></telephony></contact></phonebook></phonebooks>');
 check(count($fritzContacts) === 1 && $fritzContacts[0]['source_id'] === '42' && $fritzContacts[0]['telephone'] === '+49301234' && $fritzContacts[0]['mobile'] === '+491711234', 'parses FRITZ!Box phonebook contact and typed numbers');
 check(fritzbox_fault('<?xml version="1.0"?><s:Fault xmlns:s="urn:test"><faultstring>Invalid phonebook ID</faultstring></s:Fault>') === 'Invalid phonebook ID', 'reports a safe FRITZ!Box SOAP fault');
+$upnp713 = '<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>713</errorCode><errorDescription>Invalid array index</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>';
+check(fritzbox_fault($upnp713) === '713: Invalid array index', 'reports the specific UPnP error code and description instead of generic UPnPError');
+$upnp401 = '<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>401</errorCode><errorDescription>Unauthenticated</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>';
+check(fritzbox_fault($upnp401) === '401: Unauthenticated', 'reports an unauthenticated UPnP fault');
 
 // Exercise the real HTTP endpoint with PHP's built-in server, including its
 // Basic-auth response and XML content type.
