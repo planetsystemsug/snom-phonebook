@@ -14,6 +14,11 @@ services:
     volumes:
       - phonebook-data:/data
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
     healthcheck:
       # Check the application database directly. An HTTP health request would
       # otherwise create an Apache access-log line every 30 seconds.

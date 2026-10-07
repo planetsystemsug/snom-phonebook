@@ -78,6 +78,10 @@ recommended endpoint for the **Externes Verzeichnis** polling feature:
    and survives container replacement. For later updates, pull the changes on
    the development PC, copy the changed project files to this same QNAP folder
    without overwriting `.env`, then repeat this command.
+
+   Container logs rotate automatically: three files of at most 5 MB are kept
+   (15 MB total). Recreating the container removes its old Docker-managed log;
+   the persistent phonebook data volume is not affected.
 4. Permit the NAS port `8081` only on the trusted LAN. Browse to
    `http://NAS-HOSTNAME:8081/`, sign in with `ADMIN_USERNAME` and the password
    used to produce `ADMIN_PASSWORD_HASH`, and add contacts.
