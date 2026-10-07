@@ -78,7 +78,9 @@ recommended endpoint for the **Externes Verzeichnis** polling feature:
 4. Permit the NAS port `8081` only on the trusted LAN. Browse to
    `http://NAS-HOSTNAME:8081/`, sign in with `ADMIN_USERNAME` and the password
    used to produce `ADMIN_PASSWORD_HASH`, and add contacts.
-5. Confirm `http://NAS-HOSTNAME:8081/health.php` returns `ok`. If phone
+5. Confirm `http://NAS-HOSTNAME:8081/health.php` returns `ok`. Docker's
+   internal health check validates SQLite directly and does not create noisy
+   Apache access-log requests. If phone
    authentication is enabled, confirm the XML endpoint with:
 
    ```sh
