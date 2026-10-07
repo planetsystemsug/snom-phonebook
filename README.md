@@ -123,6 +123,9 @@ phonebook. This uses AVM's documented `GetPhonebook` interface; see
    This is a local trusted-LAN URL. Prefer a local HTTPS control URL when the
    FRITZ!Box certificate can be verified by the container; the application
    deliberately does not disable TLS certificate verification.
+   If the test reports an HTTP 500 error, use the displayed SOAP fault text to
+   correct the selected phonebook ID or the dedicated user's **Phone**/
+   phonebook permission; `0` is the normal default phonebook.
 3. The password is encrypted in SQLite with `APP_SECRET`; it is not stored in
    `.env` and is never displayed by the UI.
 4. To schedule the sync on the QNAP, create a QNAP Task Scheduler job. Run it

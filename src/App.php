@@ -175,8 +175,23 @@ function fritzbox_http(string $url, string $username, string $password, array $h
     ]);
     if ($body !== null) { curl_setopt($curl, CURLOPT_POST, true); curl_setopt($curl, CURLOPT_POSTFIELDS, $body); }
     $response = curl_exec($curl); $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE); $error = curl_error($curl); curl_close($curl);
-    if (!is_string($response) || $status < 200 || $status >= 300) throw new RuntimeException('FRITZ!Box request failed' . ($error !== '' ? ": $error" : " (HTTP $status)") . '.');
+    if (!is_string($response) || $status < 200 || $status >= 300) {
+        $detail = $error !== '' ? $error : fritzbox_fault($response);
+        throw new RuntimeException('FRITZ!Box request failed (HTTP ' . $status . ')' . ($detail === '' ? '.' : ': ' . $detail));
+    }
     return $response;
+}
+
+function fritzbox_fault(mixed $response): string
+{
+    if (!is_string($response) || $response === '') return '';
+    $document = new \DOMDocument();
+    if (@$document->loadXML($response, LIBXML_NONET)) {
+        $xpath = new \DOMXPath($document);
+        $fault = trim((string) $xpath->evaluate('string(//*[local-name()="errorDescription" or local-name()="faultstring"][1])'));
+        if ($fault !== '') return substr(preg_replace('/\s+/', ' ', $fault) ?: '', 0, 240);
+    }
+    return 'The FRITZ!Box did not provide a readable SOAP fault.';
 }
 
 function fritzbox_soap(string $controlUrl, string $username, string $password, string $action, array $arguments): string
