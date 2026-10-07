@@ -1,10 +1,13 @@
 FROM php:8.3-apache
 
-# PDO SQLite and XMLWriter are compiled into the official PHP 8.3 image. Do
+# PDO SQLite, cURL, DOM, Sodium, and XMLWriter are compiled into the official PHP 8.3 image. Do
 # not rebuild PDO SQLite here: compilation is unnecessary and may fail on NAS
 # build environments with constrained memory.
 RUN set -eux; \
     php -m | grep -qx 'pdo_sqlite'; \
+    php -m | grep -qx 'curl'; \
+    php -m | grep -qx 'dom'; \
+    php -m | grep -qx 'sodium'; \
     php -m | grep -qx 'xmlwriter'; \
     a2enmod rewrite; \
     sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf

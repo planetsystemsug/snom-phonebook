@@ -104,9 +104,44 @@ Use HTTPS and a certificate trusted by the phones if the NAS provides a reverse
 proxy; otherwise keep this service on an isolated trusted LAN. The XML endpoint
 sends `Cache-Control: no-cache` so phone polls see recent changes.
 
+## FRITZ!Box master phonebook sync
+
+The application can import one FRITZ!Box phonebook one-way over the local
+TR-064 `X_AVM-DE_OnTel` interface. It never writes to the router. Existing
+manually created contacts are retained; contacts previously imported from the
+FRITZ!Box are added, updated, or removed to mirror the selected FRITZ!Box
+phonebook. This uses AVM's documented `GetPhonebook` interface; see
+[AVM interfaces](https://fritz.com/en/pages/interfaces).
+
+1. In the FRITZ!Box, enable TR-064 and create a dedicated user that has only
+   the phonebook permission. Do not use the router administrator account.
+2. In the application, sign in and open **FRITZ!Box-Synchronisierung**. Enter
+   the local control URL (normally
+   `http://fritz.box:49000/upnp/control/x_contact`), that dedicated username,
+   its password, and the phonebook ID (normally `0`). Save, then use **Jetzt
+   synchronisieren** to test the connection.
+   This is a local trusted-LAN URL. Prefer a local HTTPS control URL when the
+   FRITZ!Box certificate can be verified by the container; the application
+   deliberately does not disable TLS certificate verification.
+3. The password is encrypted in SQLite with `APP_SECRET`; it is not stored in
+   `.env` and is never displayed by the UI.
+4. To schedule the sync on the QNAP, create a QNAP Task Scheduler job. Run it
+   hourly (or another suitable interval) as an administrator:
+
+   ```sh
+   docker exec snom-phonebook php /var/www/html/bin/fritzbox-sync.php
+   ```
+
+   The phone poll interval should be equal to or shorter than this task's
+   interval if you want updates to appear promptly. The task uses no Internet
+   access and communicates only with the local FRITZ!Box. FRITZ!Box-derived
+   contacts are read-only in this application: edit or delete them at the
+   FRITZ!Box, then run the sync.
+
 ## Local tests
 
-PHP 8.2+ with `pdo_sqlite` and `xmlwriter` is required. Run:
+PHP 8.2+ with `pdo_sqlite`, `xmlwriter`, `curl`, `dom`, and `sodium` is
+required. Run:
 
 ```sh
 php tests/run.php

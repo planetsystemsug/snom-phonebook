@@ -34,7 +34,9 @@ function db(array $config): PDO
     $pdo = new PDO('sqlite:' . $config['db_path'], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');
-    $pdo->exec('CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, company TEXT NOT NULL DEFAULT \'\', telephone TEXT NOT NULL DEFAULT \'\', mobile TEXT NOT NULL DEFAULT \'\', email TEXT NOT NULL DEFAULT \'\', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, company TEXT NOT NULL DEFAULT \'\', telephone TEXT NOT NULL DEFAULT \'\', mobile TEXT NOT NULL DEFAULT \'\', email TEXT NOT NULL DEFAULT \'\', source TEXT NOT NULL DEFAULT \'manual\', source_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    migrate_database($pdo);
     if ($config['admin_password_hash'] !== '') {
         // The environment is the source of truth for the bootstrap account.
         // This permits a deliberate password reset through an application
@@ -43,6 +45,48 @@ function db(array $config): PDO
         $stmt->execute([$config['admin_username'], $config['admin_password_hash'], gmdate('c')]);
     }
     return $pdo;
+}
+
+function migrate_database(PDO $pdo): void
+{
+    $columns = $pdo->query('PRAGMA table_info(contacts)')->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('source', $columns, true)) $pdo->exec("ALTER TABLE contacts ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+    if (!in_array('source_id', $columns, true)) $pdo->exec('ALTER TABLE contacts ADD COLUMN source_id TEXT');
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS contacts_external_source ON contacts(source, source_id) WHERE source_id IS NOT NULL');
+}
+
+function setting(PDO $pdo, string $key, string $default = ''): string
+{
+    $stmt = $pdo->prepare('SELECT value FROM settings WHERE key = ?'); $stmt->execute([$key]);
+    $value = $stmt->fetchColumn(); return $value === false ? $default : (string) $value;
+}
+
+function set_setting(PDO $pdo, string $key, string $value): void
+{
+    $stmt = $pdo->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    $stmt->execute([$key, $value]);
+}
+
+function encryption_key(array $config): string
+{
+    if (strlen($config['secret']) < 32 || !function_exists('sodium_crypto_secretbox')) throw new RuntimeException('APP_SECRET or sodium extension is unavailable.');
+    return hash('sha256', $config['secret'], true);
+}
+
+function encrypt_secret(string $plain, array $config): string
+{
+    $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    return base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, encryption_key($config)));
+}
+
+function decrypt_secret(string $encrypted, array $config): string
+{
+    $decoded = base64_decode($encrypted, true);
+    if ($decoded === false || strlen($decoded) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) throw new RuntimeException('Stored FRITZ!Box credential is invalid.');
+    $nonce = substr($decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    $plain = sodium_crypto_secretbox_open(substr($decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $nonce, encryption_key($config));
+    if ($plain === false) throw new RuntimeException('Stored FRITZ!Box credential cannot be decrypted.');
+    return $plain;
 }
 
 function h(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
@@ -83,9 +127,119 @@ function save_contact(PDO $pdo, array $input, ?int $id = null): void
         $stmt = $pdo->prepare('INSERT INTO contacts (name, company, telephone, mobile, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([...array_values($contact), $now, $now]);
     } else {
+        $source = $pdo->prepare('SELECT source FROM contacts WHERE id = ?'); $source->execute([$id]);
+        if ($source->fetchColumn() === 'fritzbox') throw new RuntimeException('FRITZ!Box contacts must be changed on the FRITZ!Box.');
         $stmt = $pdo->prepare('UPDATE contacts SET name=?, company=?, telephone=?, mobile=?, email=?, updated_at=? WHERE id=?');
         $stmt->execute([...array_values($contact), $now, $id]);
     }
+}
+
+function delete_contact(PDO $pdo, int $id): void
+{
+    $source = $pdo->prepare('SELECT source FROM contacts WHERE id = ?'); $source->execute([$id]);
+    if ($source->fetchColumn() === 'fritzbox') throw new RuntimeException('FRITZ!Box contacts must be removed on the FRITZ!Box.');
+    $stmt = $pdo->prepare('DELETE FROM contacts WHERE id = ?'); $stmt->execute([$id]);
+}
+
+function fritzbox_config(PDO $pdo, array $config): array
+{
+    return [
+        'control_url' => setting($pdo, 'fritzbox_control_url'),
+        'username' => setting($pdo, 'fritzbox_username'),
+        'password' => setting($pdo, 'fritzbox_password_enc') === '' ? '' : decrypt_secret(setting($pdo, 'fritzbox_password_enc'), $config),
+        'phonebook_id' => setting($pdo, 'fritzbox_phonebook_id', '0'),
+    ];
+}
+
+function save_fritzbox_config(PDO $pdo, array $input, array $config): void
+{
+    $url = trim((string) ($input['fritzbox_control_url'] ?? ''));
+    $username = trim((string) ($input['fritzbox_username'] ?? ''));
+    $phonebookId = trim((string) ($input['fritzbox_phonebook_id'] ?? '0'));
+    $password = (string) ($input['fritzbox_password'] ?? '');
+    $parts = parse_url($url);
+    if ($url === '' || !is_array($parts) || !in_array($parts['scheme'] ?? '', ['http', 'https'], true) || ($parts['host'] ?? '') === '') throw new RuntimeException('Invalid FRITZ!Box control URL.');
+    if ($username === '' || !ctype_digit($phonebookId)) throw new RuntimeException('FRITZ!Box username and numeric phonebook ID are required.');
+    set_setting($pdo, 'fritzbox_control_url', $url); set_setting($pdo, 'fritzbox_username', $username); set_setting($pdo, 'fritzbox_phonebook_id', $phonebookId);
+    if ($password !== '') set_setting($pdo, 'fritzbox_password_enc', encrypt_secret($password, $config));
+    if (setting($pdo, 'fritzbox_password_enc') === '') throw new RuntimeException('Enter the FRITZ!Box password at least once.');
+}
+
+function fritzbox_http(string $url, string $username, string $password, array $headers = [], ?string $body = null): string
+{
+    if (!function_exists('curl_init')) throw new RuntimeException('PHP cURL extension is unavailable.');
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPAUTH => CURLAUTH_DIGEST, CURLOPT_USERPWD => "$username:$password",
+        CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 5,
+    ]);
+    if ($body !== null) { curl_setopt($curl, CURLOPT_POST, true); curl_setopt($curl, CURLOPT_POSTFIELDS, $body); }
+    $response = curl_exec($curl); $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE); $error = curl_error($curl); curl_close($curl);
+    if (!is_string($response) || $status < 200 || $status >= 300) throw new RuntimeException('FRITZ!Box request failed' . ($error !== '' ? ": $error" : " (HTTP $status)") . '.');
+    return $response;
+}
+
+function fritzbox_soap(string $controlUrl, string $username, string $password, string $action, array $arguments): string
+{
+    $xml = new \XMLWriter(); $xml->openMemory(); $xml->startDocument('1.0', 'UTF-8');
+    $xml->startElementNs('s', 'Envelope', 'http://schemas.xmlsoap.org/soap/envelope/'); $xml->startElementNs('s', 'Body', null);
+    $xml->startElementNs('u', $action, 'urn:dslforum-org:service:X_AVM-DE_OnTel:1');
+    foreach ($arguments as $key => $value) $xml->writeElement($key, (string) $value);
+    $xml->endElement(); $xml->endElement(); $xml->endElement();
+    return fritzbox_http($controlUrl, $username, $password, ['Content-Type: text/xml; charset="utf-8"', 'SOAPAction: "urn:dslforum-org:service:X_AVM-DE_OnTel:1#' . $action . '"'], $xml->outputMemory());
+}
+
+function xml_text(string $xml, string $expression): string
+{
+    $document = new \DOMDocument(); if (!@$document->loadXML($xml, LIBXML_NONET)) throw new RuntimeException('FRITZ!Box returned invalid XML.');
+    $value = (new \DOMXPath($document))->evaluate('string(' . $expression . ')'); return trim((string) $value);
+}
+
+function parse_fritzbox_phonebook(string $xml): array
+{
+    $document = new \DOMDocument(); if (!@$document->loadXML($xml, LIBXML_NONET)) throw new RuntimeException('FRITZ!Box phonebook XML is invalid.');
+    $xpath = new \DOMXPath($document); $result = [];
+    foreach ($xpath->query('//*[local-name()="contact"]') ?: [] as $node) {
+        $name = trim((string) $xpath->evaluate('string(./*[local-name()="person"]/*[local-name()="realName"])', $node));
+        $company = trim((string) $xpath->evaluate('string(./*[local-name()="person"]/*[local-name()="company"])', $node));
+        $telephone = ''; $mobile = '';
+        foreach ($xpath->query('./*[local-name()="telephony"]/*[local-name()="number"]', $node) ?: [] as $number) {
+            $value = trim($number->textContent); $type = strtolower($number->getAttribute('type'));
+            if ($value === '') continue;
+            if ($type === 'fax') continue;
+            if ($type === 'mobile' && $mobile === '') $mobile = $value;
+            elseif ($telephone === '') $telephone = $value;
+        }
+        if ($name === '') $name = $company;
+        if ($name === '' || ($telephone === '' && $mobile === '')) continue;
+        $id = trim((string) $xpath->evaluate('string(./*[local-name()="uniqueid"])', $node));
+        if ($id === '') $id = hash('sha256', $name . "\0" . $telephone . "\0" . $mobile);
+        $result[] = validate_contact(['name' => $name, 'company' => $company, 'telephone' => $telephone, 'mobile' => $mobile, 'email' => '']) + ['source_id' => $id];
+    }
+    return $result;
+}
+
+function sync_fritzbox(PDO $pdo, array $config): array
+{
+    $fritz = fritzbox_config($pdo, $config);
+    if ($fritz['control_url'] === '' || $fritz['username'] === '' || $fritz['password'] === '') throw new RuntimeException('FRITZ!Box sync is not configured.');
+    $soap = fritzbox_soap($fritz['control_url'], $fritz['username'], $fritz['password'], 'GetPhonebook', ['NewPhonebookID' => $fritz['phonebook_id']]);
+    $phonebookUrl = xml_text($soap, '//*[local-name()="NewPhonebookURL"]');
+    if ($phonebookUrl === '') throw new RuntimeException('FRITZ!Box did not return a phonebook URL.');
+    $contacts = parse_fritzbox_phonebook(fritzbox_http($phonebookUrl, $fritz['username'], $fritz['password']));
+    $pdo->beginTransaction();
+    try {
+        $ids = []; $added = 0; $updated = 0; $now = gmdate('c');
+        foreach ($contacts as $contact) {
+            $ids[] = $contact['source_id']; $find = $pdo->prepare("SELECT id FROM contacts WHERE source = 'fritzbox' AND source_id = ?"); $find->execute([$contact['source_id']]); $existingId = $find->fetchColumn();
+            if ($existingId === false) { $insert = $pdo->prepare("INSERT INTO contacts (name, company, telephone, mobile, email, source, source_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'fritzbox', ?, ?, ?)"); $insert->execute([...array_values(array_intersect_key($contact, array_flip(CONTACT_FIELDS))), $contact['source_id'], $now, $now]); $added++; }
+            else { $update = $pdo->prepare('UPDATE contacts SET name=?, company=?, telephone=?, mobile=?, email=?, updated_at=? WHERE id=?'); $update->execute([...array_values(array_intersect_key($contact, array_flip(CONTACT_FIELDS))), $now, $existingId]); $updated++; }
+        }
+        $removed = 0; $stale = $pdo->query("SELECT id, source_id FROM contacts WHERE source = 'fritzbox'")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($stale as $contact) if (!in_array($contact['source_id'], $ids, true)) { $delete = $pdo->prepare('DELETE FROM contacts WHERE id = ?'); $delete->execute([$contact['id']]); $removed++; }
+        set_setting($pdo, 'fritzbox_last_sync_at', $now); set_setting($pdo, 'fritzbox_last_sync_result', "OK: $added added, $updated updated, $removed removed"); $pdo->commit();
+        return compact('added', 'updated', 'removed');
+    } catch (\Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); set_setting($pdo, 'fritzbox_last_sync_result', 'Failed: ' . $e->getMessage()); throw $e; }
 }
 
 function phonebook_xml(array $contacts): string

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/src/App.php';
-use function SnomPhonebook\{config, db, save_contact, validate_contact, phonebook_xml, remote_directory_xml, phonebook_authorized};
+use function SnomPhonebook\{config, db, save_contact, validate_contact, phonebook_xml, remote_directory_xml, phonebook_authorized, encrypt_secret, decrypt_secret, parse_fritzbox_phonebook};
 $failures = 0;
 function check(bool $condition, string $message): void { global $failures; if (!$condition) { $failures++; echo "FAIL: $message\n"; } }
 function expect_exception(callable $callable, string $message): void { try { $callable(); check(false, $message); } catch (RuntimeException) { check(true, $message); } }
@@ -22,6 +22,10 @@ $hash = password_hash('secret', PASSWORD_DEFAULT); $authConfig = ['phonebook_aut
 check(phonebook_authorized(['PHP_AUTH_USER' => 'phone', 'PHP_AUTH_PW' => 'secret'], $authConfig), 'authorizes valid endpoint credentials');
 check(!phonebook_authorized(['PHP_AUTH_USER' => 'phone', 'PHP_AUTH_PW' => 'wrong'], $authConfig), 'rejects invalid endpoint credentials');
 check(phonebook_authorized([], ['phonebook_auth_user' => '', 'phonebook_auth_password_hash' => '']), 'allows endpoint auth when disabled');
+$secretConfig = ['secret' => str_repeat('s', 32)];
+check(decrypt_secret(encrypt_secret('router-password', $secretConfig), $secretConfig) === 'router-password', 'encrypts stored FRITZ!Box password');
+$fritzContacts = parse_fritzbox_phonebook('<?xml version="1.0"?><phonebooks><phonebook><contact><uniqueid>42</uniqueid><person><realName>Erika Mustermann</realName><company>Beispiel GmbH</company></person><telephony><number type="work">+49301234</number><number type="mobile">+491711234</number></telephony></contact></phonebook></phonebooks>');
+check(count($fritzContacts) === 1 && $fritzContacts[0]['source_id'] === '42' && $fritzContacts[0]['telephone'] === '+49301234' && $fritzContacts[0]['mobile'] === '+491711234', 'parses FRITZ!Box phonebook contact and typed numbers');
 
 // Exercise the real HTTP endpoint with PHP's built-in server, including its
 // Basic-auth response and XML content type.
