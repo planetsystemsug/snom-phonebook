@@ -96,6 +96,19 @@ function valid_phone(string $value): bool
     return $value === '' || (bool) preg_match('/^[0-9+*#().\\/ -]{2,40}$/', $value);
 }
 
+// Normalise a FRITZ!Box number to a clean international dialable string.
+// German domestic numbers carry a leading trunk '0' (or '00' for the
+// international access code); both are rewritten to E.164-style '+'.
+function normalize_phone(string $value): string
+{
+    $clean = preg_replace('/[().\s\/-]/', '', $value);
+    if ($clean === '') return '';
+    if (str_starts_with($clean, '+')) return '+' . ltrim(substr($clean, 1), '+');
+    if (str_starts_with($clean, '00')) return '+' . substr($clean, 2);
+    if (str_starts_with($clean, '0')) return '+49' . substr($clean, 1);
+    return $clean;
+}
+
 function validate_contact(array $input): array
 {
     $contact = [];
@@ -234,6 +247,10 @@ function parse_fritzbox_phonebook(string $xml): array
             $value = trim($number->textContent); $type = strtolower($number->getAttribute('type'));
             if ($value === '') continue;
             if ($type === 'fax') continue;
+            // Skip FRITZ!Box internal function codes (e.g. **41 Wecker, **603 Leitungen belegt).
+            if (str_starts_with($value, '*')) continue;
+            $value = normalize_phone($value);
+            if ($value === '') continue;
             if ($type === 'mobile' && $mobile === '') $mobile = $value;
             elseif ($telephone === '') $telephone = $value;
         }

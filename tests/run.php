@@ -32,6 +32,13 @@ $fritzMixed = '<?xml version="1.0"?><phonebooks><phonebook>'
     . '</phonebook></phonebooks>';
 $fritzMixedContacts = parse_fritzbox_phonebook($fritzMixed);
 check(count($fritzMixedContacts) === 1 && $fritzMixedContacts[0]['source_id'] === '1' && $fritzMixedContacts[0]['telephone'] === '+49301234' && $fritzMixedContacts[0]['mobile'] === '', 'drops unrepresentable FRITZ!Box numbers without aborting the import');
+$fritzNormalize = '<?xml version="1.0"?><phonebooks><phonebook>'
+    . '<contact><uniqueid>1</uniqueid><person><realName>Büro Berlin</realName></person><telephony><number type="work">030 1234567</number><number type="mobile">0171/9876543</number></telephony></contact>'
+    . '<contact><uniqueid>2</uniqueid><person><realName>Wecker</realName></person><telephony><number type="intern">**41</number></telephony></contact>'
+    . '<contact><uniqueid>3</uniqueid><person><realName>Leitungen belegt</realName></person><telephony><number type="intern">**603</number></telephony></contact>'
+    . '</phonebook></phonebooks>';
+$fritzNormalizeContacts = parse_fritzbox_phonebook($fritzNormalize);
+check(count($fritzNormalizeContacts) === 1 && $fritzNormalizeContacts[0]['source_id'] === '1' && $fritzNormalizeContacts[0]['telephone'] === '+49301234567' && $fritzNormalizeContacts[0]['mobile'] === '+491719876543', 'normalises German numbers to international format and filters FRITZ!Box function codes');
 check(fritzbox_fault('<?xml version="1.0"?><s:Fault xmlns:s="urn:test"><faultstring>Invalid phonebook ID</faultstring></s:Fault>') === 'Invalid phonebook ID', 'reports a safe FRITZ!Box SOAP fault');
 $upnp713 = '<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>713</errorCode><errorDescription>Invalid array index</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>';
 check(fritzbox_fault($upnp713) === '713: Invalid array index', 'reports the specific UPnP error code and description instead of generic UPnPError');

@@ -110,7 +110,11 @@ The application can import one FRITZ!Box phonebook one-way over the local
 TR-064 `X_AVM-DE_OnTel` interface. It never writes to the router. Existing
 manually created contacts are retained; contacts previously imported from the
 FRITZ!Box are added, updated, or removed to mirror the selected FRITZ!Box
-phonebook. This uses AVM's documented `GetPhonebook` interface; see
+phonebook. Imported numbers are normalised to international format (German
+domestic numbers with a leading `0`, or the `00` access code, become E.164-style;
+e.g. `030 1234567` becomes `+49301234567`). FRITZ!Box internal function codes —
+numbers starting with `*`, such as `**41` Wecker or `**603` Leitungen belegt — are
+not imported. This uses AVM's documented `GetPhonebook` interface; see
 [AVM interfaces](https://fritz.com/en/pages/interfaces).
 
 1. In the FRITZ!Box, enable TR-064 and create a dedicated user that has only
